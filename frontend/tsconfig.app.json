@@ -23,5 +23,5 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src", "../backend/src/routes", "../backend/src/models", "../backend/src/middleware", "../backend/src/controllers", "../backend/src/config"]
+  "include": ["src", "../backend/src/routes", "../backend/src/models", "../backend/src/middleware", "../backend/src/controllers", "../backend/src/config", "../backend/project.routes.ts"]
 }

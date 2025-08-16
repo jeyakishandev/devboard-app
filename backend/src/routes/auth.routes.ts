@@ -1,9 +1,12 @@
 import { Router } from "express";
-import { register, registerValidators, login, loginValidators } from "../controllers/auth.controller";
+import { register, login } from "../controllers/auth.controller";
 
 const router = Router();
 
-router.post("/register", registerValidators, register);
-router.post("/login", loginValidators, login);
+// IMPORTANT : passer directement des fonctions, pas des tableaux,
+// pas d'appel immédiat, pas d'undefined.
+router.post("/register", register);
+router.post("/login", login);
 
 export default router;
+
