@@ -1,35 +1,46 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route, Navigate, Link } from "react-router-dom";
+import { AuthProvider, useAuth } from "./store/auth";
+import Login from "./pages/Login";
+import Projects from "./pages/Projects";
+import ProjectDetail from "./pages/ProjectDetail";
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
+function PrivateRoute({ children }: { children: JSX.Element }) {
+  const { token } = useAuth();
+  return token ? children : <Navigate to="/login" replace />;
 }
 
-export default App
+function Navbar() {
+  const { user, logout } = useAuth();
+  return (
+    <div className="sticky top-0 z-10 border-b bg-white/70 backdrop-blur">
+      <div className="mx-auto flex max-w-5xl items-center justify-between p-4">
+        <Link to="/" className="text-xl font-bold text-indigo-600">DevBoard</Link>
+        <div className="flex items-center gap-3">
+          {user && <span className="text-sm text-gray-600">Salut, {user.username}</span>}
+          {user ? (
+            <button className="btn-ghost" onClick={logout}>Se déconnecter</button>
+          ) : (
+            <Link to="/login" className="btn-ghost">Se connecter</Link>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Navbar />
+        <main className="mx-auto max-w-5xl p-4">
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/" element={<PrivateRoute><Projects /></PrivateRoute>} />
+            <Route path="/projects/:id" element={<PrivateRoute><ProjectDetail /></PrivateRoute>} />
+          </Routes>
+        </main>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}
