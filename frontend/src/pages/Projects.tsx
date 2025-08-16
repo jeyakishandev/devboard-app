@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { createProject, getMyProjects, Project } from "../api/projects";
+import { createProject, getMyProjects } from "../api/projects";
+import type { Project } from "../api/projects";
+
 import { useForm } from "react-hook-form";
 import { Link } from "react-router-dom";
 

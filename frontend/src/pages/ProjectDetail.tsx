@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { Task, getTasks, createTask } from "../api/tasks";
+import { getTasks, createTask } from "../api/tasks";
+import type { Task } from "../api/tasks";
+
 import { useForm } from "react-hook-form";
 import ReactMarkdown from "react-markdown";
 
