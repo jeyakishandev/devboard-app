@@ -123,6 +123,38 @@ socket.on(
     ack?.({ ok: true, data: dto });
   }
 );
+// utils pour la salle d'appel de ce projet
+const callRoom = (projectId: number) => `${room(projectId)}:call`;
+
+// --- JOIN CALL ---
+socket.on("call:join", ({ projectId }: { projectId: number }) => {
+  if (!projectId) return;
+  socket.join(callRoom(projectId));
+  // informe les autres qu'un user arrive
+  socket.to(callRoom(projectId)).emit("call:user-joined", { sid: socket.id });
+});
+
+// --- SIGNALING (offer/answer/candidate) ---
+socket.on(
+  "call:signal",
+  ({ projectId, targetSid, data }: { projectId: number; targetSid?: string | null; data: any }) => {
+    if (!projectId || !data) return;
+    // si on cible un socket précis -> direct
+    if (targetSid) {
+      socket.to(targetSid).emit("call:signal", { from: socket.id, data });
+    } else {
+      // sinon broadcast à la salle d'appel
+      socket.to(callRoom(projectId)).emit("call:signal", { from: socket.id, data });
+    }
+  }
+);
+
+// --- LEAVE CALL ---
+socket.on("call:leave", ({ projectId }: { projectId: number }) => {
+  if (!projectId) return;
+  socket.leave(callRoom(projectId));
+  socket.to(callRoom(projectId)).emit("call:user-left", { sid: socket.id });
+});
 
 
   });
