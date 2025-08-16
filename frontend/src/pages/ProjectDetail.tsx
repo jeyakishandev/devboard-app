@@ -6,6 +6,7 @@ import Spinner from "../components/Spinner";
 import Banner from "../components/Banner";
 // Si react-markdown cause souci, commentez les 2 lignes suivantes et utilisez le fallback <p> plus bas.
 import ReactMarkdown from "react-markdown";
+import { Link } from "react-router-dom";
 
 export default function ProjectDetail() {
   const { id } = useParams();
@@ -47,6 +48,7 @@ export default function ProjectDetail() {
     <div className="min-h-[calc(100vh-64px)] py-8 space-y-6">
       <div className="card">
         <h2 className="mb-3 text-lg font-semibold">Nouvelle tâche</h2>
+        <Link to={`/projects/${projectId}/members`} className="btn-ghost">👥 Membres</Link>
         {err && <div className="mb-3"><Banner kind="error">{err}</Banner></div>}
         <form onSubmit={handleSubmit(onCreate)} className="grid gap-3 md:grid-cols-3">
           <input className="input md:col-span-1" placeholder="Titre" {...register("title", { required: true })} />

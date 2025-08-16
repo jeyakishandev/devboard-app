@@ -3,7 +3,7 @@ import { AuthProvider, useAuth } from "./store/auth";
 import Login from "./pages/Login";
 import Projects from "./pages/Projects";
 import ProjectDetail from "./pages/ProjectDetail";
-
+import ProjectMembers from "./pages/ProjectMembers";
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const { token } = useAuth();
   return token ? children : <Navigate to="/login" replace />;
@@ -43,6 +43,7 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<PrivateRoute><Projects /></PrivateRoute>} />
             <Route path="/projects/:id" element={<PrivateRoute><ProjectDetail /></PrivateRoute>} />
+            <Route path="/projects/:id/members" element={<PrivateRoute><ProjectMembers /></PrivateRoute>} />
           </Routes>
         </Shell>
       </BrowserRouter>
