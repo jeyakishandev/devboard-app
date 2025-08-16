@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import routes from "./routes";
+import path from "path";
 
 const app = express();
 
@@ -13,5 +14,6 @@ app.get("/health", (_req, res) => {
 
 // IMPORTANT: monter les routes ici
 app.use("/", routes);
+app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
 
 export default app;
