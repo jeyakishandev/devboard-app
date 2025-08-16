@@ -19,3 +19,7 @@ export async function createProject(payload: { name: string; description?: strin
   const { data } = await api.post("/api/projects", payload);
   return data.data as Project;
 }
+export async function getProject(id: number): Promise<Project> {
+  const { data } = await api.get(`/api/projects/${id}`);
+  return data.data;
+}
