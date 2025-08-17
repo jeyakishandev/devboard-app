@@ -114,6 +114,8 @@ export default function ProjectDetail() {
           Projet #{projectId}{project ? ` — ${project.name}` : ""}
         </h1>
         <Link to={`/projects/${projectId}/members`} className="btn-ghost">👥 Membres</Link>
+        <Link to={`/projects/${id}/room`} className="btn-primary">Ouvrir la salle</Link>
+
       </div>
 
       {/* Barre d’onglets salons */}
