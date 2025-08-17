@@ -16,6 +16,7 @@ export class Message extends Model<
   // pièces jointes
   declare attachmentUrl: string | null;
   declare attachmentMime: string | null;
+declare channelId: number | null;
 
   declare createdAt: CreationOptional<Date>;
   declare updatedAt: CreationOptional<Date>;
@@ -35,6 +36,7 @@ Message.init(
 
     attachmentUrl: { type: DataTypes.STRING, allowNull: true, defaultValue: null },
     attachmentMime: { type: DataTypes.STRING, allowNull: true, defaultValue: null },
+channelId: { type: DataTypes.INTEGER, allowNull: true, defaultValue: null },
 
     createdAt: DataTypes.DATE,
     updatedAt: DataTypes.DATE,

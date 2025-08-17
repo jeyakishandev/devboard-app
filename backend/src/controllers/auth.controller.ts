@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
-import bcrypt from "bcryptjs";
+import { hashPassword, verifyPassword } from "../lib/password";
+
 import jwt from "jsonwebtoken";
 import { User } from "../models";
 
@@ -18,7 +19,8 @@ export async function register(req: Request, res: Response) {
     const exists = await User.findOne({ where: { email } });
     if (exists) return res.status(409).json({ success: false, error: "Email déjà utilisé" });
 
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await hashPassword(password);
+
     // cast pour satisfaire les types stricts si 'id' est requis dans ton modèle
     const user = await User.create({ username, email, passwordHash } as any);
 
@@ -42,14 +44,27 @@ export async function register(req: Request, res: Response) {
 export async function login(req: Request, res: Response) {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password)
+    if (!email || !password) {
       return res.status(400).json({ success: false, error: "email et password requis" });
+    }
 
     const user = await User.findOne({ where: { email } });
-    if (!user) return res.status(401).json({ success: false, error: "Identifiants invalides" });
+    if (!user) {
+      return res.status(401).json({ success: false, error: "Identifiants invalides" });
+    }
 
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ success: false, error: "Identifiants invalides" });
+    // Supporte passwordHash OU password_hash (selon ton modèle)
+    const hash: string | undefined =
+      (user as any).passwordHash ?? (user as any).password_hash;
+
+    if (!hash || typeof hash !== "string") {
+      console.warn("[login] missing password hash", { userId: user.id, email: user.email });
+      return res.status(401).json({ success: false, error: "Identifiants invalides" });
+    }
+
+    const ok = await verifyPassword(password, user.passwordHash);
+if (!ok) return res.status(401).json({ success: false, error: "Identifiants invalides" });
+
 
     const token = (jwt as any).sign(
       { id: user.id, email: user.email },
@@ -63,6 +78,7 @@ export async function login(req: Request, res: Response) {
     });
   } catch (e) {
     console.error("[login] error:", e);
-    return res.status(500).json({ success: false, error: "Erreur interne (login)" });
+    return res.status(500).json({ success: false, error: "ERR_LOGIN" });
   }
 }
+

@@ -13,5 +13,8 @@
     "@types/express-validator": "^2.20.33",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/uuid": "^10.0.0"
+  },
+  "scripts": {
+    "prepare": "husky install"
   }
 }

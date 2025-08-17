@@ -1,21 +1,25 @@
-import { DataTypes, InferAttributes, InferCreationAttributes, Model } from "sequelize";
+import { DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from "sequelize";
 import { sequelize } from "../config/database";
 
 export class User extends Model<InferAttributes<User>, InferCreationAttributes<User>> {
-  declare id: number;
+  declare id: CreationOptional<number>;          // <= important
   declare username: string;
   declare email: string;
   declare passwordHash: string;
-  declare avatarUrl?: string | null;
+  declare avatarUrl: CreationOptional<string | null>; // <= optionnel
+  declare createdAt: CreationOptional<Date>;
+  declare updatedAt: CreationOptional<Date>;
 }
 
 User.init(
   {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    username: { type: DataTypes.STRING(50), allowNull: false, unique: true },
-    email: { type: DataTypes.STRING(120), allowNull: false, unique: true, validate: { isEmail: true } },
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    username: { type: DataTypes.STRING, allowNull: false },
+    email: { type: DataTypes.STRING, allowNull: false, unique: true },
     passwordHash: { type: DataTypes.STRING, allowNull: false },
-    avatarUrl: { type: DataTypes.STRING, allowNull: true },
+    avatarUrl: { type: DataTypes.STRING, allowNull: true, defaultValue: null },
+    createdAt: DataTypes.DATE,
+    updatedAt: DataTypes.DATE,
   },
-  { sequelize, tableName: "users", timestamps: true },
+  { sequelize, tableName: "Users" }
 );

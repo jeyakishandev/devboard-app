@@ -1,23 +1,27 @@
-import { DataTypes, InferAttributes, InferCreationAttributes, Model } from "sequelize";
+import { DataTypes, Model, InferAttributes, InferCreationAttributes, CreationOptional } from "sequelize";
 import { sequelize } from "../config/database";
 
 export class Project extends Model<InferAttributes<Project>, InferCreationAttributes<Project>> {
-  declare id: number;
+  declare id: CreationOptional<number>;                     // <= important
   declare name: string;
-  declare description?: string | null;
+  declare description: CreationOptional<string | null>;
+  declare visibility: CreationOptional<"private" | "public">; // <= important
+  declare status: CreationOptional<"active" | "archived">;    // <= important
   declare ownerId: number;
-  declare visibility: "private" | "team";
-  declare status: "active" | "archived";
+  declare createdAt: CreationOptional<Date>;
+  declare updatedAt: CreationOptional<Date>;
 }
 
 Project.init(
   {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    name: { type: DataTypes.STRING(120), allowNull: false },
-    description: { type: DataTypes.TEXT, allowNull: true },
+    id: { type: DataTypes.INTEGER, autoIncrement: true, primaryKey: true },
+    name: { type: DataTypes.STRING, allowNull: false },
+    description: { type: DataTypes.TEXT, allowNull: true, defaultValue: null },
+    visibility: { type: DataTypes.STRING, allowNull: false, defaultValue: "private" }, // <= défaut
+    status: { type: DataTypes.STRING, allowNull: false, defaultValue: "active" },      // <= défaut
     ownerId: { type: DataTypes.INTEGER, allowNull: false },
-    visibility: { type: DataTypes.ENUM("private", "team"), allowNull: false, defaultValue: "team" },
-    status: { type: DataTypes.ENUM("active", "archived"), allowNull: false, defaultValue: "active" },
+    createdAt: DataTypes.DATE,
+    updatedAt: DataTypes.DATE,
   },
-  { sequelize, tableName: "projects", timestamps: true },
+  { sequelize, tableName: "Projects" }
 );

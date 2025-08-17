@@ -130,6 +130,9 @@ export async function createTask(req: AuthRequest, res: Response) {
   assignedToId: assignedToId ?? null,
   createdById: userId,
 } as any);
+const io = req.app.get("io");
+if (io) (io as any).to(`project:${projectId}`).emit("task:created", { projectId, taskId: t.id, title: t.title });
+
   res.status(201).json({ success: true, data: t });
 }
 
