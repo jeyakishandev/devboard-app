@@ -16,115 +16,122 @@ export default function CallPanel({ projectId, token }: { projectId: number; tok
   const [currentMicId, setCurrentMicId] = useState<string | undefined>(undefined);
 
   // ICE servers: STUN par défaut + TURN optionnel via .env
-  const iceServers = (() => {
+  const iceServers: RTCIceServer[] = (() => {
     const list: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
     const turnUrl = import.meta.env.VITE_TURN_URL;
     const turnUser = import.meta.env.VITE_TURN_USERNAME;
     const turnCred = import.meta.env.VITE_TURN_CREDENTIAL;
-    if (turnUrl && turnUser && turnCred) {
-      list.push({ urls: turnUrl, username: turnUser, credential: turnCred });
-    }
+    if (turnUrl && turnUser && turnCred) list.push({ urls: turnUrl, username: turnUser, credential: turnCred });
     return list;
   })();
 
-  useEffect(() => {
-    // recense les micros dispo
-    navigator.mediaDevices.enumerateDevices().then(devs => {
-      const onlyMics = devs.filter(d => d.kind === "audioinput")
-        .map(d => ({ deviceId: d.deviceId, label: d.label || "Micro" }));
-      setMics(onlyMics);
-      if (!currentMicId && onlyMics[0]) setCurrentMicId(onlyMics[0].deviceId);
-    }).catch(() => {});
+  // --- helpers
+  const enumerateMics = async () => {
+    // Sur Chrome, labels vides tant qu'aucun getUserMedia n'a été accordé
+    try {
+      await navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(s => s.getTracks().forEach(t => t.stop()));
+    } catch {/* ignore */}
+    const devs = await navigator.mediaDevices.enumerateDevices();
+    const onlyMics = devs.filter(d => d.kind === "audioinput").map(d => ({ deviceId: d.deviceId, label: d.label || "Micro" }));
+    setMics(onlyMics);
+    if (!currentMicId && onlyMics[0]) setCurrentMicId(onlyMics[0].deviceId);
+  };
 
-    const s = connectSocket(token);
-    setSocket(s);
-
-    s.emit("call:join", { projectId });
-
-    s.off("call:user-joined");
-    s.on("call:user-joined", async () => { await startPeer(true); });
-
-    s.off("call:signal");
-    s.on("call:signal", async ({ from, data }: any) => {
-      const pc = pcRef.current ?? (await startPeer(false));
-      if (data?.type === "offer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(data));
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        s.emit("call:signal", { projectId, targetSid: from, data: answer });
-      } else if (data?.type === "answer") {
-        await pc.setRemoteDescription(new RTCSessionDescription(data));
-      } else if (data?.candidate) {
-        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-      }
-    });
-
-    s.off("call:user-left");
-    s.on("call:user-left", () => endPeer());
-
-    return () => {
-      s.emit("call:leave", { projectId });
-      endPeer();
-      s.disconnect();
+  const getMicStream = async (deviceId?: string) => {
+    const constraints: MediaStreamConstraints = {
+      audio: {
+        deviceId: deviceId ? { exact: deviceId } : undefined,
+        echoCancellation: true, noiseSuppression: true, autoGainControl: true,
+        channelCount: 1, sampleRate: 48000,
+      },
+      video: false,
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, token]);
+    return await navigator.mediaDevices.getUserMedia(constraints);
+  };
 
-  async function startPeer(isCaller: boolean) {
-    if (pcRef.current) return pcRef.current;
-    setInCall(true);
-
-    const pc = new RTCPeerConnection({ iceServers });
-    pcRef.current = pc;
-
-    // audio input avec traitement “propre”
-    const audio = await getMicStream(currentMicId);
-    if (localRef.current) localRef.current.srcObject = audio;
-    audio.getTracks().forEach(t => pc.addTrack(t, audio));
-
-    // remote
-    pc.ontrack = (e) => {
-      if (remoteRef.current) {
-        remoteRef.current.srcObject = e.streams[0];
-        // certains navigateurs veulent un play() manuel
-        (remoteRef.current as HTMLVideoElement).play().catch(() => {});
-      }
-    };
-
-    // ICE candidates
-    pc.onicecandidate = (e) => {
-      if (e.candidate && socket) {
-        socket.emit("call:signal", { projectId, data: { candidate: e.candidate } });
-      }
-    };
-
-    if (isCaller && socket) {
-      const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: true });
-      await pc.setLocalDescription(offer);
-      socket.emit("call:signal", { projectId, data: offer });
-    }
-    return pc;
-  }
-
-  function endPeer() {
-    setInCall(false);
-    setSharing(false);
+  const cleanupPeer = () => {
     try {
       pcRef.current?.getSenders().forEach(s => s.track?.stop());
+      pcRef.current?.getReceivers().forEach(r => r.track?.stop());
       pcRef.current?.close();
     } catch {}
     pcRef.current = null;
     if (localRef.current) localRef.current.srcObject = null;
     if (remoteRef.current) remoteRef.current.srcObject = null;
-  }
+    setInCall(false);
+    setSharing(false);
+  };
 
-  function toggleMute() {
+  const negotiate = async () => {
+    const pc = pcRef.current;
+    const s = socket;
+    if (!pc || !s) return;
+    // Offre locale
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    s.emit("call:signal", { projectId, data: offer });
+  };
+
+  const startPeer = async (isCaller: boolean) => {
+    if (pcRef.current) return pcRef.current;
+
+    const pc = new RTCPeerConnection({ iceServers });
+    pcRef.current = pc;
+    setInCall(true);
+
+    // Recevoir vidéo même si on n'en émet pas
+    pc.addTransceiver("video", { direction: "recvonly" });
+
+    // Négociation auto quand on remplace une piste
+    pc.onnegotiationneeded = async () => {
+      try { await negotiate(); } catch {}
+    };
+
+    // ICE + états
+    pc.onicecandidate = (e) => {
+      if (e.candidate && socket) socket.emit("call:signal", { projectId, data: { candidate: e.candidate } });
+    };
+    pc.oniceconnectionstatechange = () => {
+      const st = pc.iceConnectionState;
+      if (st === "failed") pc.restartIce(); // tentative soft recovery
+    };
+    pc.onconnectionstatechange = () => {
+      const st = pc.connectionState;
+      if (st === "disconnected" || st === "failed" || st === "closed") {
+        // laisse une chance au restart ICE, sinon cleanup
+        if (st !== "disconnected") cleanupPeer();
+      }
+    };
+
+    // Flux remote
+    pc.ontrack = (e) => {
+      const stream = e.streams?.[0] ?? new MediaStream([e.track]);
+      if (remoteRef.current) {
+        remoteRef.current.srcObject = stream;
+        (remoteRef.current as HTMLVideoElement).play().catch(() => {});
+      }
+    };
+
+    // Ajoute l'audio local
+    const audio = await getMicStream(currentMicId);
+    if (localRef.current) localRef.current.srcObject = audio;
+    audio.getTracks().forEach(t => pc.addTrack(t, audio));
+
+    if (isCaller) {
+      await negotiate();
+    }
+    return pc;
+  };
+
+  // --- UI actions
+  const toggleMute = () => {
     const senders = pcRef.current?.getSenders().filter(s => s.track?.kind === "audio") || [];
-    senders.forEach(s => { if (s.track) s.track.enabled = !micEnabled; });
-    setMicEnabled(v => !v);
-  }
+    const next = !micEnabled;
+    senders.forEach(s => { if (s.track) s.track.enabled = next; });
+    setMicEnabled(next);
+  };
 
-  async function switchMic(deviceId: string) {
+  const switchMic = async (deviceId: string) => {
     setCurrentMicId(deviceId);
     if (!pcRef.current) return;
     const newStream = await getMicStream(deviceId);
@@ -133,67 +140,82 @@ export default function CallPanel({ projectId, token }: { projectId: number; tok
     if (sender && newTrack) {
       await sender.replaceTrack(newTrack);
       if (localRef.current) localRef.current.srcObject = newStream;
+      // Certains browsers demandent renégociation après replaceTrack
+      try { await negotiate(); } catch {}
     }
-  }
+  };
 
-  async function shareScreen() {
+  const shareScreen = async () => {
     if (!pcRef.current || sharing) return;
-    // onglet Chrome => audio possible; sinon la plupart du temps video seule.
     const display: MediaStream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true, audio: false });
     const screenTrack = display.getVideoTracks()[0];
-
+    // remplace ou ajoute
     const sender = pcRef.current.getSenders().find(s => s.track?.kind === "video");
     if (sender) await sender.replaceTrack(screenTrack);
     else pcRef.current.addTrack(screenTrack, display);
-
     setSharing(true);
-
-    // preview locale écran (optionnel)
     if (localRef.current) localRef.current.srcObject = display;
+    screenTrack.onended = stopShare;
+    try { await negotiate(); } catch {}
+  };
 
-    screenTrack.onended = () => {
-      stopShare();
-    };
-  }
-
-  function stopShare() {
+  const stopShare = async () => {
     if (!pcRef.current || !sharing) return;
-    // retire la piste vidéo (revient à l’audio seul)
     const sender = pcRef.current.getSenders().find(s => s.track?.kind === "video");
-    try { sender?.replaceTrack(null as any); } catch {}
+    try { await sender?.replaceTrack(null as any); } catch {}
     setSharing(false);
-    // remet la preview locale sur le micro
-    getMicStream(currentMicId).then(stream => {
-      if (localRef.current) localRef.current.srcObject = stream;
-    });
-  }
+    // Remet la preview sur l'audio local
+    const stream = await getMicStream(currentMicId);
+    if (localRef.current) localRef.current.srcObject = stream;
+    try { await negotiate(); } catch {}
+  };
 
-  async function getMicStream(deviceId?: string) {
-    const constraints: MediaStreamConstraints = {
-      audio: {
-        deviceId: deviceId ? { exact: deviceId } : undefined,
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        channelCount: 1,
-        sampleRate: 48000
-      },
-      video: false
+  // --- lifecycle
+  useEffect(() => {
+    enumerateMics().catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const s = connectSocket(token);
+    setSocket(s);
+
+    s.emit("call:join", { projectId });
+
+    const onJoined = async () => { await startPeer(true); };
+    const onSignal = async ({ from, data }: any) => {
+      const pc = pcRef.current ?? (await startPeer(false));
+      if (data?.type === "offer") {
+        await pc.setRemoteDescription(new RTCSessionDescription(data));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        s.emit("call:signal", { projectId, targetSid: from, data: answer });
+      } else if (data?.type === "answer") {
+        if (!pc.currentRemoteDescription) await pc.setRemoteDescription(new RTCSessionDescription(data));
+      } else if (data?.candidate) {
+        try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch {}
+      }
     };
-    return await navigator.mediaDevices.getUserMedia(constraints);
-  }
+    const onLeft = () => cleanupPeer();
+
+    s.off("call:user-joined"); s.on("call:user-joined", onJoined);
+    s.off("call:signal"); s.on("call:signal", onSignal);
+    s.off("call:user-left"); s.on("call:user-left", onLeft);
+
+    return () => {
+      try { s.emit("call:leave", { projectId }); } catch {}
+      cleanupPeer();
+      s.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, token, currentMicId]);
 
   return (
     <div className="card">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="font-semibold">Appel vocal</h3>
         <div className="flex items-center gap-2">
-          <select
-            className="input"
-            value={currentMicId}
-            onChange={(e) => switchMic(e.target.value)}
-            disabled={!inCall}
-          >
+          <select className="input" value={currentMicId} onChange={(e) => switchMic(e.target.value)} disabled={!inCall}>
             {mics.map(m => <option key={m.deviceId} value={m.deviceId}>{m.label}</option>)}
           </select>
           <button className="btn" onClick={toggleMute} disabled={!inCall}>
@@ -204,7 +226,7 @@ export default function CallPanel({ projectId, token }: { projectId: number; tok
           ) : (
             <button className="btn" onClick={stopShare} disabled={!inCall}>⛔️ Stop partage</button>
           )}
-          <button className="btn" onClick={endPeer} disabled={!inCall}>☎️ Raccrocher</button>
+          <button className="btn" onClick={cleanupPeer} disabled={!inCall}>☎️ Raccrocher</button>
         </div>
       </div>
 
