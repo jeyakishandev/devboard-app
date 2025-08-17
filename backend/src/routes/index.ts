@@ -5,6 +5,7 @@ import uploadRoutes from "./upload.routes";
 import channelRoutes from "./channel.routes";
 import healthRoutes from "./health.routes";     
 import devRoutes from "./dev.routes"; 
+import rtcRoutes from "./rtc";
 const router = Router();
 
 router.use("/auth", authRoutes);
@@ -13,6 +14,7 @@ router.use("/auth", authRoutes);
 router.use("/api/projects", projectRoutes);
 router.use("/api/uploads", uploadRoutes);
 router.use("/api/projects/:projectId/channels", channelRoutes);
+router.use("/rtc", rtcRoutes);
 
 if (process.env.NODE_ENV !== "production") {
   router.use("/dev", devRoutes);  // <— uniquement en dev
